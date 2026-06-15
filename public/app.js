@@ -368,6 +368,7 @@ function render(data) {
   renderProfile(data.user, data.summary);
   renderRoles(data.roles);
   renderLicenses(data.licenses || []);
+  $('#devices-btn').textContent = `🖥️ Devices (${(data.devices || []).length})`;
   applyFilter(STATE.days);
 }
 
@@ -449,6 +450,50 @@ $('#tenant-btn').addEventListener('click', () => {
   STATE.compareData = null;
   renderBaseline();
 });
+
+$('#devices-btn').addEventListener('click', () => {
+  if (!STATE.data) return;
+  openDevicesDetail(STATE.data.devices || []);
+});
+
+const DEVICE_TRUST = {
+  AzureAd: 'Entra joined',
+  ServerAd: 'Hybrid joined',
+  Workplace: 'Entra registered (BYOD)',
+};
+
+function openDevicesDetail(devices) {
+  $('#detail-title').textContent = `Devices (${devices.length})`;
+  if (!devices.length) {
+    $('#detail-body').innerHTML = '<p class="empty">No devices owned/registered by this user (or Directory.Read.All permission missing).</p>';
+    detailOverlay.classList.remove('hidden');
+    return;
+  }
+  const rows = devices
+    .slice()
+    .sort((a, b) => new Date(b.approximateLastSignInDateTime || 0) - new Date(a.approximateLastSignInDateTime || 0))
+    .map((d) => {
+      const trust = DEVICE_TRUST[d.trustType] || d.trustType || '-';
+      const compliant = d.isCompliant === null ? '-' : d.isCompliant ? '<span class="ok">Yes</span>' : '<span class="fail">No</span>';
+      const managed = d.isManaged === null ? '-' : d.isManaged ? 'Yes' : 'No';
+      const os = [d.operatingSystem, d.operatingSystemVersion].filter(Boolean).join(' ');
+      const last = d.approximateLastSignInDateTime ? new Date(d.approximateLastSignInDateTime).toLocaleString() : '-';
+      return `<tr>
+        <td>${esc(d.displayName || '-')}</td>
+        <td>${esc(os || '-')}</td>
+        <td>${esc(trust)}</td>
+        <td>${managed}</td>
+        <td>${compliant}</td>
+        <td>${esc(d.relationship)}</td>
+        <td>${esc(last)}</td>
+      </tr>`;
+    })
+    .join('');
+  $('#detail-body').innerHTML = `<table><thead><tr>
+      <th>Name</th><th>OS</th><th>Trust type</th><th>Managed</th><th>Compliant</th><th>Relationship</th><th>Last activity</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  detailOverlay.classList.remove('hidden');
+}
 
 function clearBaseline() {
   STATE.baselineKind = null;
@@ -631,6 +676,7 @@ function renderProfile(u, summary) {
     ['Job title', u.jobTitle],
     ['Department', u.department],
     ['Account enabled', u.accountEnabled === null ? '-' : u.accountEnabled ? 'Yes' : 'No'],
+    ['Devices', String((STATE.data.devices || []).length)],
     ['Created', u.createdDateTime ? new Date(u.createdDateTime).toLocaleDateString() : '-'],
     ['Object ID', u.id],
   ];

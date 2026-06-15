@@ -66,6 +66,20 @@ export interface UserLicense {
   enabledServices: string[];
 }
 
+export interface UserDevice {
+  id: string;
+  displayName: string | null;
+  operatingSystem: string | null;
+  operatingSystemVersion: string | null;
+  isCompliant: boolean | null;
+  isManaged: boolean | null;
+  trustType: string | null;
+  accountEnabled: boolean | null;
+  approximateLastSignInDateTime: string | null;
+  deviceId: string | null;
+  relationship: 'owned' | 'registered' | 'both';
+}
+
 export interface AnalysisResult {
   user: UserProfile;
   generatedAt: string;
@@ -73,6 +87,7 @@ export interface AnalysisResult {
   days: number;
   signIns: SignInRecord[];
   licenses: UserLicense[];
+  devices: UserDevice[];
   roles: PrivilegedRole[];
   summary: {
     totalSignIns: number;

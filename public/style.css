@@ -206,8 +206,8 @@ main { padding: 24px; max-width: 1280px; margin: 0 auto; }
 .filters button:hover { color: var(--text); }
 .filters button.active { background: var(--accent); color: #fff; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-#compare-btn, #tenant-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
-#compare-btn:hover, #tenant-btn:hover { border-color: var(--accent); }
+#compare-btn, #tenant-btn, #devices-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+#compare-btn:hover, #tenant-btn:hover, #devices-btn:hover { border-color: var(--accent); }
 #pdf-btn { background: var(--green); }
 .report-period { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 

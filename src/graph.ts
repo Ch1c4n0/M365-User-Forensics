@@ -6,6 +6,7 @@ import {
   AnalysisResult,
   PrivilegedRole,
   SignInRecord,
+  UserDevice,
   UserLicense,
   UserProfile,
 } from './types';
@@ -232,6 +233,50 @@ export async function getUserLicenses(userId: string): Promise<UserLicense[]> {
     console.warn('Failed to read licenseDetails:', err?.message || err);
     return [];
   }
+}
+
+/** Reads the devices owned/registered by the user (Entra directory devices). */
+export async function getUserDevices(userId: string): Promise<UserDevice[]> {
+  const client = getClient();
+  const select =
+    'id,displayName,operatingSystem,operatingSystemVersion,isCompliant,isManaged,trustType,approximateLastSignInDateTime,deviceId,accountEnabled';
+  const map = new Map<string, UserDevice>();
+
+  async function pull(rel: 'ownedDevices' | 'registeredDevices', tag: 'owned' | 'registered') {
+    try {
+      const res = await client
+        .api(`/users/${encodeURIComponent(userId)}/${rel}/microsoft.graph.device`)
+        .select(select)
+        .top(100)
+        .get();
+      for (const d of res.value || []) {
+        const existing = map.get(d.id);
+        if (existing) {
+          existing.relationship = 'both';
+          continue;
+        }
+        map.set(d.id, {
+          id: d.id,
+          displayName: d.displayName ?? null,
+          operatingSystem: d.operatingSystem ?? null,
+          operatingSystemVersion: d.operatingSystemVersion ?? null,
+          isCompliant: d.isCompliant ?? null,
+          isManaged: d.isManaged ?? null,
+          trustType: d.trustType ?? null,
+          accountEnabled: d.accountEnabled ?? null,
+          approximateLastSignInDateTime: d.approximateLastSignInDateTime ?? null,
+          deviceId: d.deviceId ?? null,
+          relationship: tag,
+        });
+      }
+    } catch (err: any) {
+      console.warn(`Failed to read ${rel}:`, err?.message || err);
+    }
+  }
+
+  await pull('ownedDevices', 'owned');
+  await pull('registeredDevices', 'registered');
+  return [...map.values()];
 }
 
 /** Busca a foto do usuario e retorna como data URI (ou null se nao houver). */
@@ -483,11 +528,12 @@ export async function analyzeUser(
       ? getSignInsFromLogAnalytics(user.id, user.userPrincipalName, days)
       : getSignIns(user.id);
 
-  const [signIns, roles, photo, licenses] = await Promise.all([
+  const [signIns, roles, photo, licenses, devices] = await Promise.all([
     signInsPromise,
     getPrivilegedRoles(user.id),
     getUserPhoto(user.id),
     getUserLicenses(user.id),
+    getUserDevices(user.id),
   ]);
   user.photoDataUri = photo;
 
@@ -509,6 +555,7 @@ export async function analyzeUser(
     signIns,
     roles,
     licenses,
+    devices,
     summary: {
       totalSignIns: signIns.length,
       successfulSignIns: successful.length,
