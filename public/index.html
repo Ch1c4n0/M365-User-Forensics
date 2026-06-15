@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M365 User Forensics</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css" />
+  <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="style.css?v=12" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img id="company-logo" class="hidden" alt="Logo" />
+      <h1>🛡️ M365 User Forensics</h1>
+    </div>
+    <form id="search-form">
+      <input id="user-input" type="text" placeholder="UPN, email or objectId" autocomplete="off" required />
+      <select id="source-select" title="Data source">
+        <option value="graph">Microsoft Graph · 30d</option>
+        <option value="loganalytics">Log Analytics · 90d+</option>
+      </select>
+      <button type="submit" id="search-btn">Analyze</button>
+      <button type="button" id="gear-btn" title="Configure Service Principal">⚙️</button>
+    </form>
+  </header>
+
+  <!-- Service Principal settings modal -->
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>⚙️ Service Principal (Entra ID)</h2>
+        <button type="button" id="settings-close" class="icon-btn">✕</button>
+      </div>
+
+      <div id="config-status" class="config-status"></div>
+
+      <form id="settings-form">
+        <label>Tenant ID (Directory ID)
+          <input id="cfg-tenant" type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" required />
+        </label>
+        <label>Client ID (Application ID)
+          <input id="cfg-client" type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" required />
+        </label>
+        <label>Client Secret
+          <input id="cfg-secret" type="password" placeholder="secret value" autocomplete="off" required />
+        </label>
+        <label>Log Analytics Workspace ID <span class="opt">(optional — enables 90+ day history)</span>
+          <input id="cfg-workspace" type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" />
+        </label>
+
+        <label class="checkbox-row">
+          <input id="cfg-remember" type="checkbox" /> Remember in this browser (localStorage)
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" id="cfg-test">Test connection</button>
+          <button type="submit" id="cfg-save">Save</button>
+        </div>
+        <div id="cfg-msg" class="cfg-msg"></div>
+      </form>
+
+      <details class="howto">
+        <summary>How to create the Service Principal and permissions</summary>
+        <ol>
+          <li>Go to <a href="https://entra.microsoft.com" target="_blank" rel="noopener">entra.microsoft.com</a> → <b>Identity → Applications → App registrations → New registration</b>.</li>
+          <li>Give it a name (e.g. <i>M365-Forensics</i>), <b>single tenant</b>, then register.</li>
+          <li>Copy the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b> from the overview page.</li>
+          <li>Under <b>Certificates &amp; secrets → New client secret</b>, generate and copy the <b>Value</b> (shown only once).</li>
+          <li>Under <b>API permissions → Add a permission → Microsoft Graph → Application permissions</b>, add:
+            <ul>
+              <li><code>AuditLog.Read.All</code> — sign-in logs</li>
+              <li><code>Directory.Read.All</code> — directory data</li>
+              <li><code>RoleManagement.Read.Directory</code> — privileged roles</li>
+              <li><code>User.Read.All</code> — user profile &amp; photo</li>
+              <li><code>OrganizationalBranding.Read.All</code> — <i>(optional)</i> company logo</li>
+            </ul>
+          </li>
+          <li>Click <b>Grant admin consent</b> for the tenant.</li>
+          <li>Sign-in logs require an <b>Entra ID P1/P2</b> license (Graph retains up to 30 days).</li>
+        </ol>
+        <p class="howto-note"><b>For 90+ days (Log Analytics):</b> In <b>Entra → Monitoring → Diagnostic settings</b>, export <code>SigninLogs</code> to a Log Analytics workspace. Grant the Service Principal the <b>Log Analytics Reader</b> role on that workspace, then paste the <b>Workspace ID</b> above.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- Compare-user modal -->
+  <div id="compare-overlay" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>⚖️ Compare with another user</h2>
+        <button type="button" id="compare-close" class="icon-btn">✕</button>
+      </div>
+      <form id="compare-form">
+        <label>UPN, email or objectId of the user to compare
+          <input id="compare-upn" type="text" placeholder="user2@company.com" autocomplete="off" required />
+        </label>
+        <div class="modal-actions">
+          <button type="submit" id="compare-go">Compare</button>
+        </div>
+        <div id="compare-msg" class="cfg-msg"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Drill-down detail modal -->
+  <div id="detail-overlay" class="overlay hidden">
+    <div class="modal modal-lg">
+      <div class="modal-head">
+        <h2 id="detail-title"></h2>
+        <button type="button" id="detail-close" class="icon-btn">✕</button>
+      </div>
+      <div id="detail-body" class="detail-body"></div>
+    </div>
+  </div>
+
+  <main>
+    <div id="status" class="status"></div>
+
+    <section id="results" class="hidden">
+      <!-- Report bar: period filters + actions -->
+      <div class="report-toolbar no-print">
+        <div class="filters" id="filters"></div>
+        <div class="actions">
+          <button type="button" id="compare-btn">⚖️ Compare user</button>
+          <button type="button" id="tenant-btn">📊 Tenant average</button>
+          <button type="button" id="pdf-btn">📄 Export PDF</button>
+        </div>
+      </div>
+
+      <div id="report-period" class="report-period"></div>
+
+      <!-- Comparison / baseline panel -->
+      <div class="card hidden" id="comparison-card">
+        <div class="cmp-head">
+          <h2 id="comparison-title">Comparison</h2>
+          <button type="button" id="comparison-clear" class="icon-btn">✕</button>
+        </div>
+        <div id="comparison-body"></div>
+      </div>
+
+      <!-- User profile -->
+      <div class="card" id="profile-card">
+        <h2>User</h2>
+        <div class="profile-head">
+          <div id="profile-avatar" class="avatar"></div>
+          <div id="profile" class="profile-grid"></div>
+        </div>
+        <div id="priv-banner"></div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="summary-grid" id="summary"></div>
+
+      <!-- Privileged roles -->
+      <div class="card">
+        <h2>Privileged access</h2>
+        <div id="roles"></div>
+      </div>
+
+      <!-- License assignments -->
+      <div class="card">
+        <h2>License assignments (<span id="license-count">0</span>)</h2>
+        <p class="chart-hint">Click a license to see its enabled service plans.</p>
+        <div id="licenses"></div>
+      </div>
+
+      <!-- Access timeline -->
+      <div class="card">
+        <h2>Access timeline — success vs failures</h2>
+        <div class="chart-box"><canvas id="timeline-chart"></canvas></div>
+      </div>
+
+      <!-- Microsoft 365 tools -->
+      <div class="grid-2">
+        <div class="card">
+          <h2>M365 tools — usage (by resource) <sup>*</sup></h2>
+          <p class="chart-hint">Share per accessed service.</p>
+          <div class="chart-box"><canvas id="tools-usage-chart"></canvas></div>
+          <p class="footnote">* Sign-in / token events, not API calls.</p>
+        </div>
+        <div class="card">
+          <h2>Top client apps (by application) <sup>*</sup></h2>
+          <p class="chart-hint">Which client apps the user signed in through.</p>
+          <div class="chart-box"><canvas id="apps-usage-chart"></canvas></div>
+          <p class="footnote">* Sign-in / token events, not API calls.</p>
+        </div>
+      </div>
+
+      <!-- Tools access timeline -->
+      <div class="card">
+        <h2>M365 tools — access timeline <sup>*</sup></h2>
+        <p class="chart-hint">Daily access for the top accessed services.</p>
+        <div class="chart-box"><canvas id="tools-timeline-chart"></canvas></div>
+        <p class="footnote">* Sign-in / token events, not API calls.</p>
+      </div>
+
+      <!-- Map -->
+      <div class="card">
+        <h2>Sign-in locations</h2>
+        <div id="map"></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid-2">
+        <div class="card">
+          <h2>Top applications</h2>
+          <canvas id="apps-chart"></canvas>
+        </div>
+        <div class="card">
+          <h2>Top IPs</h2>
+          <canvas id="ips-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Sign-in history table -->
+      <div class="card">
+        <h2>Sign-in history (<span id="signin-count">0</span>)</h2>
+        <div class="table-wrap">
+          <table id="signins-table">
+            <thead>
+              <tr>
+                <th>Date/Time</th>
+                <th>Application</th>
+                <th>Status</th>
+                <th>IP</th>
+                <th>Location</th>
+                <th>Client</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/markercluster/leaflet.markercluster.js"></script>
+  <script src="vendor/chartjs/chart.umd.min.js"></script>
+  <script src="app.js?v=12"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+services:
+  m365-forensics:
+    build: .
+    container_name: m365-user-forensics
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+    volumes:
+      # Permite ajustar o frontend sem rebuild (apenas recarregar o navegador).
+      - ./public:/app/public:ro
+    restart: unless-stopped
