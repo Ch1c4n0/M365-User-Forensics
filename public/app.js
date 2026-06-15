@@ -42,6 +42,7 @@ async function runAnalysis(user) {
   const btn = $('#search-btn');
   btn.disabled = true;
   const lookback = STATE.source === 'loganalytics' ? 90 : 30;
+  showLoading(`Querying ${sourceLabel(STATE.source)} for "${user}"…`);
   setStatus(`Querying ${sourceLabel(STATE.source)} for "${user}"...`, false);
   resultsEl.classList.add('hidden');
 
@@ -57,18 +58,22 @@ async function runAnalysis(user) {
     setStatus(err.message, true);
   } finally {
     btn.disabled = false;
+    hideLoading();
   }
 }
 
 // Tenant-wide overview (shown automatically after the Service Principal is configured).
-async function loadTenantOverview() {
+// Defaults to the last 24h so the main page loads fast; period buttons re-fetch wider windows.
+async function loadTenantOverview(days = 1) {
   STATE.source = 'graph';
   $('#source-select').value = 'graph';
-  renderFilters('graph');
+  renderFilters('graph', days);
+  const label = days === 1 ? 'last 24h' : `last ${days} days`;
+  showLoading(`Loading tenant overview (${label})…`);
   setStatus('Loading tenant overview…', false);
   resultsEl.classList.add('hidden');
   try {
-    const res = await fetch('/api/tenant-overview?days=30');
+    const res = await fetch(`/api/tenant-overview?days=${days}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load tenant overview.');
     render(data);
@@ -76,6 +81,8 @@ async function loadTenantOverview() {
     resultsEl.classList.remove('hidden');
   } catch (err) {
     setStatus(err.message, true);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -88,12 +95,21 @@ function setStatus(msg, isError) {
   statusEl.classList.toggle('error', !!isError);
 }
 
+function showLoading(text) {
+  $('#loading-text').textContent = text || 'Loading…';
+  $('#loading-overlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+  $('#loading-overlay').classList.add('hidden');
+}
+
 /* ----------------------- Period filters + PDF ----------------------- */
 
 // Build the period buttons available for the active source.
-function renderFilters(source) {
+function renderFilters(source, activeDays) {
   const ranges = source === 'loganalytics' ? [7, 30, 90] : [1, 7, 30];
-  const def = source === 'loganalytics' ? 90 : 30;
+  const def = activeDays != null ? activeDays : (source === 'loganalytics' ? 90 : 30);
   STATE.days = def;
   $('#filters').innerHTML = ranges
     .map((d) => `<button type="button" data-days="${d}" class="${d === def ? 'active' : ''}">${d === 1 ? '24 hours' : d + ' days'}</button>`)
@@ -104,7 +120,10 @@ renderFilters('graph');
 $('#filters').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-days]');
   if (!btn || !STATE.data) return;
-  applyFilter(Number(btn.dataset.days));
+  const days = Number(btn.dataset.days);
+  // In tenant mode the data is fetched per-window, so re-fetch instead of client-filter.
+  if (STATE.mode === 'tenant') loadTenantOverview(days);
+  else applyFilter(days);
 });
 
 $('#pdf-btn').addEventListener('click', () => window.print());

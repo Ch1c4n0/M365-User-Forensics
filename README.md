@@ -26,23 +26,26 @@
 <a name="english"></a>
 ## 🇺🇸 English
 
-A web tool to analyze the **sign-in history of a Microsoft 365 user** via Microsoft Graph (and optionally Azure Monitor / Log Analytics for longer history).
+A web tool to analyze the **sign-in history of a Microsoft 365 user** (or the **whole tenant**) via Microsoft Graph — and optionally Azure Monitor / Log Analytics for longer history.
 
 ### Features
 
+- 🏢 **Tenant overview dashboard** — loads automatically after sign-in, reusing the same layout tenant-wide (company logo as the photo, org info, subscriptions, device count, same charts/timelines/map). Defaults to the **last 24h** for a fast first load; period buttons re-fetch wider windows.
 - 🕐 **When they signed in** — full sign-in history (timestamp, success/failure)
-- 📱 **Which applications & tools** — top client apps and accessed M365 resources
+- 📱 **Which applications & tools** — top client apps (by application) and M365 tools usage (by resource)
 - 🔑 **Privileged access** — assigned directory roles (Global Admin, etc.)
-- 🎫 **License assignments** — assigned SKUs; click a license to see enabled service plans
+- 🎫 **License assignments / tenant subscriptions** — SKUs; click one to see enabled service plans
+- 🖥️ **Devices** — owned/registered Entra devices (OS, trust type, managed, compliant, last activity), with the device count on the main page
 - 📊 **Access counts** — totals, successes, failures, unique apps/IPs/countries
 - 🗺️ **Locations on a map** — geolocation of sign-ins (Leaflet) with clustering
 - 🌐 **IPs** — source addresses and per-IP counts
 - 📈 **Timelines** — success vs failures over time, and per-tool access timeline
 - 🖼️ **User photo** and **company logo** (tenant branding)
 - ⤵️ **Drill-down** — click any metric to see the granular records
-- ⚖️ **Compare** — compare the user against another user, side by side
-- 🏢 **Tenant average** — compare the user against a sampled tenant baseline
+- ⚖️ **Compare** — compare the user against another user, side by side (table + chart)
+- 🏢 **Tenant average** — compare the user against a sampled tenant baseline (table + chart)
 - 📄 **PDF export** and **period filters** (24h / 7 / 30 days, or 90+ via Log Analytics)
+- 📄 **Paginated sign-in history** — 50 rows per page (with a User column in tenant mode)
 
 > ℹ️ Usage counts are **sign-in / token events**, not API calls.
 
@@ -84,10 +87,12 @@ npm run build && npm start
 ### 4. Usage
 
 1. Open http://localhost:8484
-2. Configure the Service Principal in the gear ⚙️
-3. Enter the **UPN, email or objectId** of a user
-4. Pick the **data source** (Graph or Log Analytics) and click **Analyze**
-5. Use **period filters**, **Compare**, **Tenant average**, drill-downs and **Export PDF**
+2. Configure the Service Principal in the gear ⚙️ — the **tenant overview** then loads automatically (last 24h)
+3. Click the **logo/title** anytime to return to the tenant overview
+4. Enter a **UPN, email or objectId** to switch to single-user mode and click **Analyze**
+5. Use **period filters**, **Compare**, **Tenant average**, **Devices**, drill-downs and **Export PDF**
+
+> The tenant overview defaults to the last 24h for a fast first load; the period buttons re-fetch wider windows on demand.
 
 ### 5. 90+ day history with Log Analytics (optional)
 
@@ -102,6 +107,7 @@ Microsoft Graph only retains sign-in logs for ~30 days. For longer history:
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/analyze?user=<upn\|email\|id>&source=<graph\|loganalytics>&days=<n>` | Full analysis JSON |
+| `GET /api/tenant-overview?days=<n>` | Tenant-wide dashboard |
 | `GET /api/tenant-average?days=<n>&sample=<n>` | Sampled tenant baseline |
 | `GET /api/branding` | Company logo (data URI) |
 | `GET/POST /api/config` · `POST /api/config/test` | Credentials state / save / test |
@@ -120,23 +126,26 @@ Microsoft Graph only retains sign-in logs for ~30 days. For longer history:
 <a name="portugues"></a>
 ## 🇧🇷 Português
 
-Ferramenta web para analisar o **histórico de logins de um usuário do Microsoft 365** via Microsoft Graph (e, opcionalmente, Azure Monitor / Log Analytics para histórico mais longo).
+Ferramenta web para analisar o **histórico de logins de um usuário do Microsoft 365** (ou do **tenant inteiro**) via Microsoft Graph — e, opcionalmente, Azure Monitor / Log Analytics para histórico mais longo.
 
 ### Funcionalidades
 
+- 🏢 **Dashboard geral do tenant** — carrega automaticamente após o login, reaproveitando a mesma diagramação de forma tenant-wide (logo da empresa como foto, dados da organização, assinaturas, contagem de dispositivos, mesmos gráficos/timelines/mapa). Padrão das **últimas 24h** para carregar rápido; os botões de período rebuscam janelas maiores.
 - 🕐 **Quando logou** — histórico completo de sign-ins (data/hora, sucesso/falha)
-- 📱 **Quais aplicativos e ferramentas** — top apps clientes e recursos M365 acessados
+- 📱 **Quais aplicativos e ferramentas** — top apps clientes (por aplicativo) e uso das ferramentas M365 (por recurso)
 - 🔑 **Acessos privilegiados** — roles de diretório atribuídas (Global Admin, etc.)
-- 🎫 **Licenciamentos** — SKUs atribuídos; clique numa licença para ver os service plans habilitados
+- 🎫 **Licenciamentos / assinaturas do tenant** — SKUs; clique numa licença para ver os service plans habilitados
+- 🖥️ **Devices** — dispositivos Entra owned/registered (OS, trust type, gerenciado, compliant, última atividade), com a contagem na página principal
 - 📊 **Quantidade de acessos** — totais, sucessos, falhas, apps/IPs/países únicos
 - 🗺️ **Localidades no mapa** — geolocalização dos logins (Leaflet) com clusters
 - 🌐 **IPs** — endereços de origem e contagem por IP
 - 📈 **Timelines** — sucesso vs. falhas ao longo do tempo e timeline de acesso por ferramenta
 - 🖼️ **Foto do usuário** e **logo da empresa** (branding do tenant)
 - ⤵️ **Drill-down** — clique em qualquer métrica para ver os registros granulares
-- ⚖️ **Comparar** — compara o usuário com outro usuário, lado a lado
-- 🏢 **Média do tenant** — compara o usuário com uma baseline amostral do tenant
+- ⚖️ **Comparar** — compara o usuário com outro usuário, lado a lado (tabela + gráfico)
+- 🏢 **Média do tenant** — compara o usuário com uma baseline amostral do tenant (tabela + gráfico)
 - 📄 **Exportar PDF** e **filtros de período** (24h / 7 / 30 dias, ou 90+ via Log Analytics)
+- 📄 **Histórico de sign-ins paginado** — 50 linhas por página (com coluna User no modo tenant)
 
 > ℹ️ As contagens de uso são **eventos de sign-in / emissão de token**, não chamadas de API.
 
@@ -178,10 +187,12 @@ npm run build && npm start
 ### 4. Uso
 
 1. Abra http://localhost:8484
-2. Configure o Service Principal na engrenagem ⚙️
-3. Informe o **UPN, email ou objectId** de um usuário
-4. Escolha a **fonte de dados** (Graph ou Log Analytics) e clique em **Analyze**
-5. Use os **filtros de período**, **Compare**, **Tenant average**, os drill-downs e **Export PDF**
+2. Configure o Service Principal na engrenagem ⚙️ — o **dashboard do tenant** carrega automaticamente (últimas 24h)
+3. Clique no **logo/título** a qualquer momento para voltar ao overview do tenant
+4. Informe um **UPN, email ou objectId** para entrar no modo de usuário único e clique em **Analyze**
+5. Use os **filtros de período**, **Compare**, **Tenant average**, **Devices**, os drill-downs e **Export PDF**
+
+> O overview do tenant vem por padrão nas últimas 24h para carregar rápido; os botões de período rebuscam janelas maiores sob demanda.
 
 ### 5. Histórico de 90+ dias com Log Analytics (opcional)
 
@@ -196,6 +207,7 @@ O Microsoft Graph retém os sign-in logs por apenas ~30 dias. Para histórico ma
 | Endpoint | Descrição |
 |----------|-----------|
 | `GET /api/analyze?user=<upn\|email\|id>&source=<graph\|loganalytics>&days=<n>` | JSON completo da análise |
+| `GET /api/tenant-overview?days=<n>` | Dashboard geral do tenant |
 | `GET /api/tenant-average?days=<n>&sample=<n>` | Baseline amostral do tenant |
 | `GET /api/branding` | Logo da empresa (data URI) |
 | `GET/POST /api/config` · `POST /api/config/test` | Estado / salvar / testar credenciais |

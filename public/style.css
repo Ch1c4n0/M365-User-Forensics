@@ -72,6 +72,26 @@ main { padding: 24px; max-width: 1280px; margin: 0 auto; }
 
 .hidden { display: none; }
 
+/* Centered loading overlay */
+.loading-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; background: rgba(15,20,25,0.72); backdrop-filter: blur(2px);
+}
+.loading-overlay.hidden { display: none; }
+.spinner {
+  width: 54px; height: 54px; border: 5px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-bar { width: 260px; height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.loading-bar::before {
+  content: ''; display: block; height: 100%; width: 40%;
+  background: var(--accent); border-radius: 4px; animation: indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+#loading-text { color: var(--text); font-size: 15px; margin: 0; }
+
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
