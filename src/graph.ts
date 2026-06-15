@@ -507,6 +507,149 @@ export async function getTenantBaseline(days: number, sample: number): Promise<T
   };
 }
 
+/** Tenant-wide sign-ins within a window (no user filter), capped. */
+async function getTenantSignIns(days: number, cap: number): Promise<SignInRecord[]> {
+  const client = getClient();
+  const records: SignInRecord[] = [];
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  let response: PageCollection = await client
+    .api('/auditLogs/signIns')
+    .filter(`createdDateTime ge ${cutoff}`)
+    .top(Math.min(cap, 1000))
+    .get();
+
+  while (response && response.value) {
+    for (const s of response.value) {
+      records.push(mapSignIn(s));
+      if (records.length >= cap) return records;
+    }
+    if (response['@odata.nextLink']) {
+      response = await client.api(response['@odata.nextLink']).get();
+    } else {
+      break;
+    }
+  }
+  return records;
+}
+
+/** Reads tenant subscriptions (SKUs) mapped to the license shape. */
+async function getSubscribedSkus(): Promise<UserLicense[]> {
+  const client = getClient();
+  try {
+    const res = await client.api('/subscribedSkus').get();
+    return (res.value || []).map((s: any) => {
+      const sku: string = s.skuPartNumber || '';
+      const enabled = s.prepaidUnits?.enabled ?? 0;
+      const consumed = s.consumedUnits ?? 0;
+      const services = (s.servicePlans || [])
+        .filter((p: any) => p.provisioningStatus === 'Success' || p.appliesTo === 'User')
+        .map((p: any) => p.servicePlanName);
+      return {
+        skuId: s.skuId,
+        skuPartNumber: sku,
+        displayName: `${SKU_NAMES[sku] || sku} (${consumed}/${enabled})`,
+        enabledServices: services,
+      };
+    });
+  } catch (err: any) {
+    console.warn('Failed to read subscribedSkus:', err?.message || err);
+    return [];
+  }
+}
+
+/** Counts tenant devices (best-effort). */
+async function getTenantDeviceCount(): Promise<number> {
+  const client = getClient();
+  try {
+    const r = await client.api('/devices/$count').header('ConsistencyLevel', 'eventual').get();
+    return typeof r === 'number' ? r : parseInt(String(r), 10) || 0;
+  } catch (err: any) {
+    console.warn('Failed to count devices:', err?.message || err);
+    return 0;
+  }
+}
+
+/** Counts tenant privileged role assignments (best-effort, first page). */
+async function getTenantPrivilegedCount(): Promise<number> {
+  const client = getClient();
+  try {
+    const res = await client.api('/roleManagement/directory/roleAssignments').top(999).get();
+    return (res.value || []).length;
+  } catch (err: any) {
+    console.warn('Failed to count role assignments:', err?.message || err);
+    return 0;
+  }
+}
+
+/** Builds a tenant-wide overview using the same shape as a user analysis. */
+export async function getTenantOverview(days: number): Promise<AnalysisResult> {
+  const client = getClient();
+  const d = days > 0 ? days : 30;
+
+  const orgRes = await client
+    .api('/organization')
+    .select('id,displayName,verifiedDomains,createdDateTime,countryLetterCode,city')
+    .get();
+  const org = (orgRes.value || [])[0] || {};
+
+  const [logo, signIns, licenses, deviceCount, privilegedAssignments] = await Promise.all([
+    getCompanyLogo(),
+    getTenantSignIns(d, MAX_SIGNINS),
+    getSubscribedSkus(),
+    getTenantDeviceCount(),
+    getTenantPrivilegedCount(),
+  ]);
+
+  const primaryDomain =
+    (org.verifiedDomains || []).find((v: any) => v.isDefault)?.name ||
+    (org.verifiedDomains || [])[0]?.name ||
+    null;
+
+  const user: UserProfile = {
+    id: org.id || credentials.tenantId,
+    displayName: org.displayName || 'Tenant',
+    userPrincipalName: primaryDomain,
+    mail: null,
+    jobTitle: 'Tenant overview',
+    department: org.countryLetterCode || null,
+    accountEnabled: null,
+    createdDateTime: org.createdDateTime || null,
+    photoDataUri: logo,
+  };
+
+  const successful = signIns.filter((s) => s.status.errorCode === 0);
+  const failed = signIns.filter((s) => s.status.errorCode !== 0);
+  const apps = new Set(signIns.map((s) => s.appDisplayName).filter(Boolean));
+  const ips = new Set(signIns.map((s) => s.ipAddress).filter(Boolean));
+  const countries = new Set(signIns.map((s) => s.location?.countryOrRegion).filter(Boolean) as string[]);
+  const dates = signIns.map((s) => s.createdDateTime).filter(Boolean).sort();
+
+  return {
+    user,
+    generatedAt: new Date().toISOString(),
+    source: 'graph',
+    days: d,
+    mode: 'tenant',
+    signIns,
+    roles: [],
+    licenses,
+    devices: [],
+    deviceCount,
+    privilegedAssignments,
+    summary: {
+      totalSignIns: signIns.length,
+      successfulSignIns: successful.length,
+      failedSignIns: failed.length,
+      uniqueApps: apps.size,
+      uniqueIps: ips.size,
+      uniqueCountries: countries.size,
+      hasPrivilegedAccess: privilegedAssignments > 0,
+      firstSeen: dates.length ? dates[0] : null,
+      lastSeen: dates.length ? dates[dates.length - 1] : null,
+    },
+  };
+}
+
 export interface AnalyzeOptions {
   source?: 'graph' | 'loganalytics';
   days?: number;

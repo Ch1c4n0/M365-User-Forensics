@@ -8,6 +8,7 @@ import {
   testConnection,
   getCompanyLogo,
   getTenantBaseline,
+  getTenantOverview,
 } from './graph';
 
 const TENANT_SAMPLE = parseInt(process.env.TENANT_SAMPLE || '20', 10);
@@ -61,6 +62,18 @@ app.get('/api/branding', async (_req: Request, res: Response) => {
     res.json({ logo });
   } catch (err: any) {
     res.json({ logo: null });
+  }
+});
+
+// Tenant-wide overview (dashboard shown right after configuring credentials).
+app.get('/api/tenant-overview', async (req: Request, res: Response) => {
+  const days = parseInt(String(req.query.days || ''), 10) || 30;
+  try {
+    const result = await getTenantOverview(days);
+    res.json(result);
+  } catch (err: any) {
+    console.error('Tenant overview error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to build tenant overview.' });
   }
 });
 

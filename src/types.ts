@@ -85,6 +85,9 @@ export interface AnalysisResult {
   generatedAt: string;
   source: 'graph' | 'loganalytics';
   days: number;
+  mode?: 'user' | 'tenant';
+  deviceCount?: number;
+  privilegedAssignments?: number;
   signIns: SignInRecord[];
   licenses: UserLicense[];
   devices: UserDevice[];

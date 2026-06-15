@@ -11,7 +11,7 @@
 </head>
 <body>
   <header>
-    <div class="brand">
+    <div class="brand" id="brand" title="Back to tenant overview">
       <img id="company-logo" class="hidden" alt="Logo" />
       <h1>🛡️ M365 User Forensics</h1>
     </div>
@@ -144,7 +144,7 @@
 
       <!-- User profile -->
       <div class="card" id="profile-card">
-        <h2>User</h2>
+        <h2 id="profile-card-title">User</h2>
         <div class="profile-head">
           <div id="profile-avatar" class="avatar"></div>
           <div id="profile" class="profile-grid"></div>
@@ -156,14 +156,14 @@
       <div class="summary-grid" id="summary"></div>
 
       <!-- Privileged roles -->
-      <div class="card">
+      <div class="card" id="roles-card">
         <h2>Privileged access</h2>
         <div id="roles"></div>
       </div>
 
-      <!-- License assignments -->
+      <!-- License assignments / tenant subscriptions -->
       <div class="card">
-        <h2>License assignments (<span id="license-count">0</span>)</h2>
+        <h2><span id="licenses-card-title">License assignments</span> (<span id="license-count">0</span>)</h2>
         <p class="chart-hint">Click a license to see its enabled service plans.</p>
         <div id="licenses"></div>
       </div>

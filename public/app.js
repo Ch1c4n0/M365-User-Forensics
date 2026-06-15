@@ -9,8 +9,12 @@ const $ = (sel) => document.querySelector(sel);
 const statusEl = $('#status');
 const resultsEl = $('#results');
 
+const PAGE_SIZE = 50;
+
 const STATE = {
   data: null, days: 30, source: 'graph', filtered: [],
+  mode: 'user',            // 'user' | 'tenant'
+  tablePage: 1,
   baselineKind: null,      // null | 'compare' | 'tenant'
   compareData: null,       // full analysis of the compared user
   tenantCache: {},         // { [days]: TenantBaseline }
@@ -53,6 +57,25 @@ async function runAnalysis(user) {
     setStatus(err.message, true);
   } finally {
     btn.disabled = false;
+  }
+}
+
+// Tenant-wide overview (shown automatically after the Service Principal is configured).
+async function loadTenantOverview() {
+  STATE.source = 'graph';
+  $('#source-select').value = 'graph';
+  renderFilters('graph');
+  setStatus('Loading tenant overview…', false);
+  resultsEl.classList.add('hidden');
+  try {
+    const res = await fetch('/api/tenant-overview?days=30');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load tenant overview.');
+    render(data);
+    setStatus(`Tenant overview — ${data.user.displayName || ''} — generated ${new Date(data.generatedAt).toLocaleString()}.`, false);
+    resultsEl.classList.remove('hidden');
+  } catch (err) {
+    setStatus(err.message, true);
   }
 }
 
@@ -365,10 +388,24 @@ async function testConfig() {
 
 function render(data) {
   STATE.data = data;
+  STATE.mode = data.mode === 'tenant' ? 'tenant' : 'user';
+  STATE.tablePage = 1;
+  STATE.baselineKind = null;
+
+  // Adjust UI chrome for tenant vs user mode.
+  const tenant = STATE.mode === 'tenant';
+  document.body.classList.toggle('tenant-mode', tenant);
+  $('#profile-card-title').textContent = tenant ? 'Tenant' : 'User';
+  $('#roles-card').style.display = tenant ? 'none' : '';
+  $('#licenses-card-title').textContent = tenant ? 'Tenant subscriptions' : 'License assignments';
+
+  const deviceN = tenant ? (data.deviceCount || 0) : (data.devices || []).length;
+  $('#devices-btn').textContent = `🖥️ Devices (${deviceN})`;
+
   renderProfile(data.user, data.summary);
   renderRoles(data.roles);
   renderLicenses(data.licenses || []);
-  $('#devices-btn').textContent = `🖥️ Devices (${(data.devices || []).length})`;
+  $('#comparison-card').classList.add('hidden');
   applyFilter(STATE.days);
 }
 
