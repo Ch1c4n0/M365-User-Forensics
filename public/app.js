@@ -1,6 +1,6 @@
 'use strict';
 
-let map, markerLayer, appsChart, ipsChart, timelineChart, toolsUsageChart, toolsTimelineChart, appsUsageChart;
+let map, markerLayer, appsChart, ipsChart, timelineChart, toolsUsageChart, toolsTimelineChart, appsUsageChart, comparisonChart;
 
 // Palette for multi-series tool charts.
 const TOOL_COLORS = ['#2f81f7', '#3fb950', '#d29922', '#a371f7', '#f85149', '#39c5cf', '#db61a2', '#e3b341'];
@@ -453,7 +453,36 @@ $('#tenant-btn').addEventListener('click', () => {
 function clearBaseline() {
   STATE.baselineKind = null;
   STATE.compareData = null;
+  if (comparisonChart) { comparisonChart.destroy(); comparisonChart = null; }
   $('#comparison-card').classList.add('hidden');
+}
+
+// Grouped bar chart: user vs baseline across the comparison metrics.
+function renderComparisonChart(labels, userVals, baseVals, userLabel, baseLabel) {
+  $('#comparison-chart-box').style.display = '';
+  if (comparisonChart) comparisonChart.destroy();
+  comparisonChart = new Chart(document.getElementById('comparison-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: userLabel, data: userVals, backgroundColor: '#2f81f7' },
+        { label: baseLabel, data: baseVals, backgroundColor: '#d29922' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#e6edf3', boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
+      },
+      scales: {
+        x: { ticks: { color: '#8b98a5', font: { size: 10 } }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#8b98a5', precision: 0 }, grid: { color: '#2c3947' } },
+      },
+    },
+  });
 }
 
 // Metrics of a sign-in set (the 6 summary numbers).
@@ -534,6 +563,8 @@ function renderBaseline() {
     const t = STATE.tenantCache[STATE.days];
     $('#comparison-title').textContent = `📊 ${STATE.data.user.displayName || 'User'} vs Tenant average — ${periodLabel}`;
     if (!t) {
+      $('#comparison-chart-box').style.display = 'none';
+      if (comparisonChart) { comparisonChart.destroy(); comparisonChart = null; }
       $('#comparison-body').innerHTML = '<p class="muted">⏳ Sampling tenant users and computing the average… this can take a moment.</p>';
       fetchTenant(STATE.days);
       return;
@@ -560,6 +591,12 @@ function renderBaseline() {
     <p class="cmp-note">${STATE.baselineKind === 'tenant'
       ? 'Tenant average is a sampled estimate (per-user values are capped) — directional, not exact.'
       : 'Both users compared over the same selected period.'}</p>`;
+
+  // Grouped bar chart of the same metrics.
+  const chartLabels = ['Total', 'Success', 'Failures', 'Apps', 'IPs', 'Countries', 'Licenses'];
+  const userVals = METRIC_ROWS.map(([, k]) => userMetrics[k]).concat(userLicenses);
+  const baseVals = METRIC_ROWS.map(([, k]) => base[k]).concat(baseLicenses);
+  renderComparisonChart(chartLabels, userVals, baseVals, STATE.data.user.displayName || 'User', baseLabel);
 }
 
 function computeSummary(signIns, roles) {
