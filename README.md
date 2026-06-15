@@ -70,7 +70,7 @@ cd "M365 User Forensics"
 docker compose up --build -d
 ```
 
-Open http://localhost:8080, click the gear ⚙️ and enter the Service Principal credentials (or seed them via `.env`, copying from `.env.example`).
+Open http://localhost:8484, click the gear ⚙️ and enter the Service Principal credentials (or seed them via `.env`, copying from `.env.example`).
 
 ### 3. Run locally (without Docker)
 
@@ -83,7 +83,7 @@ npm run build && npm start
 
 ### 4. Usage
 
-1. Open http://localhost:8080
+1. Open http://localhost:8484
 2. Configure the Service Principal in the gear ⚙️
 3. Enter the **UPN, email or objectId** of a user
 4. Pick the **data source** (Graph or Log Analytics) and click **Analyze**
@@ -164,7 +164,7 @@ cd "M365 User Forensics"
 docker compose up --build -d
 ```
 
-Abra http://localhost:8080, clique na engrenagem ⚙️ e informe as credenciais do Service Principal (ou configure pelo `.env`, copiando do `.env.example`).
+Abra http://localhost:8484, clique na engrenagem ⚙️ e informe as credenciais do Service Principal (ou configure pelo `.env`, copiando do `.env.example`).
 
 ### 3. Executar localmente (sem Docker)
 
@@ -177,7 +177,7 @@ npm run build && npm start
 
 ### 4. Uso
 
-1. Abra http://localhost:8080
+1. Abra http://localhost:8484
 2. Configure o Service Principal na engrenagem ⚙️
 3. Informe o **UPN, email ou objectId** de um usuário
 4. Escolha a **fonte de dados** (Graph ou Log Analytics) e clique em **Analyze**
