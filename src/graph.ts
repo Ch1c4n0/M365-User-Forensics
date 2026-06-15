@@ -324,6 +324,8 @@ function mapSignIn(s: any): SignInRecord {
   return {
     id: s.id,
     createdDateTime: s.createdDateTime,
+    userDisplayName: s.userDisplayName ?? null,
+    userPrincipalName: s.userPrincipalName ?? null,
     appDisplayName: s.appDisplayName ?? null,
     appId: s.appId ?? null,
     ipAddress: s.ipAddress ?? null,

@@ -340,12 +340,13 @@ async function saveConfig() {
       localStorage.removeItem(STORAGE_KEY);
     }
     msg.className = 'cfg-msg ok';
-    msg.textContent = '✔️ Credentials saved. Closing...';
+    msg.textContent = '✔️ Credentials saved. Loading tenant overview…';
     refreshConfigStatus();
     loadLogo();
     setTimeout(() => {
       overlay.classList.add('hidden');
       msg.textContent = '';
+      loadTenantOverview(); // show the tenant dashboard right after login
     }, 700);
   } catch (err) {
     msg.className = 'cfg-msg err';
@@ -381,6 +382,7 @@ async function testConfig() {
     const res = await fetch('/api/config');
     const s = await res.json();
     if (!s.configured) openSettings();
+    else loadTenantOverview(); // show the tenant dashboard right away
   } catch { /* ignore */ }
 })();
 
@@ -417,6 +419,7 @@ function filterByDays(signIns, days) {
 
 function applyFilter(days) {
   STATE.days = days;
+  STATE.tablePage = 1;
   const filtered = filterByDays(STATE.data.signIns, days);
   STATE.filtered = filtered;
 
@@ -490,8 +493,18 @@ $('#tenant-btn').addEventListener('click', () => {
 
 $('#devices-btn').addEventListener('click', () => {
   if (!STATE.data) return;
+  if (STATE.mode === 'tenant') {
+    const n = STATE.data.deviceCount || 0;
+    $('#detail-title').textContent = `Tenant devices (${n})`;
+    $('#detail-body').innerHTML = `<p class="empty">The tenant has ${n} registered devices. Analyze a specific user to see their per-device list.</p>`;
+    detailOverlay.classList.remove('hidden');
+    return;
+  }
   openDevicesDetail(STATE.data.devices || []);
 });
+
+// Clicking the brand/logo returns to the tenant overview.
+$('#brand').addEventListener('click', () => loadTenantOverview());
 
 const DEVICE_TRUST = {
   AzureAd: 'Entra joined',
@@ -706,23 +719,34 @@ function renderProfile(u, summary) {
     avatar.innerHTML = `<span>${esc(initials)}</span>`;
   }
 
-  const fields = [
-    ['Name', u.displayName],
-    ['UPN', u.userPrincipalName],
-    ['Email', u.mail],
-    ['Job title', u.jobTitle],
-    ['Department', u.department],
-    ['Account enabled', u.accountEnabled === null ? '-' : u.accountEnabled ? 'Yes' : 'No'],
-    ['Devices', String((STATE.data.devices || []).length)],
-    ['Created', u.createdDateTime ? new Date(u.createdDateTime).toLocaleDateString() : '-'],
-    ['Object ID', u.id],
-  ];
+  const fields = STATE.mode === 'tenant'
+    ? [
+        ['Organization', u.displayName],
+        ['Primary domain', u.userPrincipalName],
+        ['Country', u.department],
+        ['Devices (tenant)', String(STATE.data.deviceCount || 0)],
+        ['Created', u.createdDateTime ? new Date(u.createdDateTime).toLocaleDateString() : '-'],
+        ['Tenant ID', u.id],
+      ]
+    : [
+        ['Name', u.displayName],
+        ['UPN', u.userPrincipalName],
+        ['Email', u.mail],
+        ['Job title', u.jobTitle],
+        ['Department', u.department],
+        ['Account enabled', u.accountEnabled === null ? '-' : u.accountEnabled ? 'Yes' : 'No'],
+        ['Devices', String((STATE.data.devices || []).length)],
+        ['Created', u.createdDateTime ? new Date(u.createdDateTime).toLocaleDateString() : '-'],
+        ['Object ID', u.id],
+      ];
   $('#profile').innerHTML = fields
     .map(([label, val]) => `<div><span>${label}</span><strong>${esc(val || '-')}</strong></div>`)
     .join('');
 
   const banner = $('#priv-banner');
-  if (summary.hasPrivilegedAccess) {
+  if (STATE.mode === 'tenant') {
+    banner.innerHTML = `<div class="banner info">🏢 Tenant-wide overview — ${STATE.data.privilegedAssignments || 0} privileged role assignments · ${(STATE.data.licenses || []).length} subscriptions.</div>`;
+  } else if (summary.hasPrivilegedAccess) {
     banner.innerHTML = `<div class="banner danger">⚠️ User HAS privileged access in the directory.</div>`;
   } else {
     banner.innerHTML = `<div class="banner safe">✔️ No privileged role directly assigned.</div>`;
@@ -1002,17 +1026,26 @@ function drawBar(existing, canvasId, data, color) {
 }
 
 function renderTable(signIns) {
-  $('#signin-count').textContent = signIns.length;
-  const rows = signIns
-    .slice()
-    .sort((a, b) => new Date(b.createdDateTime) - new Date(a.createdDateTime))
+  const sorted = signIns.slice().sort((a, b) => new Date(b.createdDateTime) - new Date(a.createdDateTime));
+  const total = sorted.length;
+  $('#signin-count').textContent = total;
+
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (STATE.tablePage > pages) STATE.tablePage = pages;
+  if (STATE.tablePage < 1) STATE.tablePage = 1;
+  const start = (STATE.tablePage - 1) * PAGE_SIZE;
+  const pageRows = sorted.slice(start, start + PAGE_SIZE);
+
+  const rows = pageRows
     .map((s) => {
       const ok = s.status.errorCode === 0;
       const place = s.location ? [s.location.city, s.location.countryOrRegion].filter(Boolean).join(', ') : '-';
       const risk = (s.riskLevelDuringSignIn || 'none');
       const riskCls = risk === 'high' ? 'risk-high' : risk === 'medium' ? 'risk-medium' : 'muted';
+      const who = s.userDisplayName || s.userPrincipalName || '-';
       return `<tr>
         <td>${esc(new Date(s.createdDateTime).toLocaleString())}</td>
+        <td class="col-user">${esc(who)}</td>
         <td>${esc(s.appDisplayName || '-')}</td>
         <td class="${ok ? 'ok' : 'fail'}">${ok ? 'Success' : 'Failure (' + s.status.errorCode + ')'}</td>
         <td>${esc(s.ipAddress || '-')}</td>
@@ -1022,8 +1055,35 @@ function renderTable(signIns) {
       </tr>`;
     })
     .join('');
-  $('#signins-table tbody').innerHTML = rows || '<tr><td colspan="7" class="muted">No sign-in records.</td></tr>';
+  $('#signins-table tbody').innerHTML = rows || '<tr><td colspan="8" class="muted">No sign-in records.</td></tr>';
+  renderPager(total, pages);
 }
+
+function renderPager(total, pages) {
+  const el = $('#signins-pager');
+  if (total <= PAGE_SIZE) { el.innerHTML = ''; return; }
+  const p = STATE.tablePage;
+  const from = (p - 1) * PAGE_SIZE + 1;
+  const to = Math.min(p * PAGE_SIZE, total);
+  el.innerHTML = `
+    <button type="button" data-action="first" ${p <= 1 ? 'disabled' : ''}>« First</button>
+    <button type="button" data-action="prev" ${p <= 1 ? 'disabled' : ''}>‹ Prev</button>
+    <span>Page ${p} / ${pages} — ${from}–${to} of ${total}</span>
+    <button type="button" data-action="next" ${p >= pages ? 'disabled' : ''}>Next ›</button>
+    <button type="button" data-action="last" ${p >= pages ? 'disabled' : ''}>Last »</button>`;
+}
+
+$('#signins-pager').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-action]');
+  if (!b || !STATE.filtered) return;
+  const pages = Math.max(1, Math.ceil(STATE.filtered.length / PAGE_SIZE));
+  const a = b.dataset.action;
+  if (a === 'first') STATE.tablePage = 1;
+  else if (a === 'prev') STATE.tablePage = Math.max(1, STATE.tablePage - 1);
+  else if (a === 'next') STATE.tablePage = Math.min(pages, STATE.tablePage + 1);
+  else if (a === 'last') STATE.tablePage = pages;
+  renderTable(STATE.filtered);
+});
 
 function esc(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -15,6 +15,8 @@ export interface SignInLocation {
 export interface SignInRecord {
   id: string;
   createdDateTime: string;
+  userDisplayName?: string | null;
+  userPrincipalName?: string | null;
   appDisplayName: string | null;
   appId: string | null;
   ipAddress: string | null;
