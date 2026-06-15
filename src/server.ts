@@ -1,6 +1,24 @@
 import 'dotenv/config';
+import dns from 'dns';
 import express, { Request, Response } from 'express';
 import path from 'path';
+
+// Docker bridge networks frequently lack IPv6 routing, while Microsoft endpoints
+// (login.microsoftonline.com, graph.microsoft.com) publish AAAA records — so Node
+// may pick IPv6 and fail with ENETUNREACH ("network_error" in MSAL). Force IPv4
+// resolution for every outbound lookup (Graph, MSAL token, Log Analytics).
+const _dnsLookup = dns.lookup.bind(dns);
+(dns as any).lookup = function (hostname: string, options: any, callback: any) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = { family: 4 };
+  } else if (typeof options === 'number') {
+    options = { family: 4 };
+  } else {
+    options = { ...(options || {}), family: 4 };
+  }
+  return _dnsLookup(hostname, options, callback);
+};
 import {
   analyzeUser,
   setCredentials,
